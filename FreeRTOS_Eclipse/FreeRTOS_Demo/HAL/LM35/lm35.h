@@ -1,0 +1,23 @@
+/*
+ * pot.h
+ *
+ *  Created on: Jul 14, 2025
+ *      Author: LightStore
+ */
+
+#ifndef HAL_LM35_H_
+#define HAL_LM35_H_
+
+#include "std_types.h"
+#include "adc0.h"
+
+#define SENSOR1_CHANNEL_ID         ADC_PE2
+#define SENSOR2_CHANNEL_ID         ADC_PE1
+#define SENSOR_MAX_VOLT_VALUE      3.3
+#define SENSOR_MAX_TEMPERATURE     45
+
+uint8 LM35_getTemperature(uint8 channel_id);
+
+
+
+#endif /* HAL_LM35_H_ */

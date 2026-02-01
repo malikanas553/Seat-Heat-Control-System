@@ -1,0 +1,31 @@
+/*
+ * adc.c
+ *
+ *  Created on: Jul 13, 2025
+ *      Author: LightStore
+ */
+#include "adc0.h"
+#include "tm4c123gh6pm_registers.h"
+
+static void GPIO_SetupADC0Pins(void)
+{
+    SYSCTL_RCGCGPIO_REG  |= 0x01;         /* Enable clock for GPIO PORTA */
+    while(!(SYSCTL_PRGPIO_REG & 0x01));   /* Wait until GPIO PORTA clock is activated and it is ready for access*/
+
+    GPIO_PORTA_AMSEL_REG &= 0xFC;         /* Disable Analog on PA0 & PA1 */
+    GPIO_PORTA_DIR_REG   &= 0xFE;         /* Configure PA0 as input pin */
+    GPIO_PORTA_DIR_REG   |= 0x02;         /* Configure PA1 as output pin */
+    GPIO_PORTA_AFSEL_REG |= 0x03;         /* Enable alternative function on PA0 & PA1 */
+    /* Set PMCx bits for PA0 & PA1 with value 1 to use PA0 as UART0 RX pin and PA1 as UART0 Tx pin */
+    GPIO_PORTA_PCTL_REG  = (GPIO_PORTA_PCTL_REG & 0xFFFFFF00) | 0x00000011;
+    GPIO_PORTA_DEN_REG   |= 0x03;         /* Enable Digital I/O on PA0 & PA1 */
+}
+
+void ADC_Init(void)
+{
+   SYSCTL_RCGCADC_REG |= (1<<0);
+   while(!(SYSCTL_PRADC_REG & 0x01));
+}
+
+
+

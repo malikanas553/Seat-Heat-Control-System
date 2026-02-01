@@ -1,0 +1,46 @@
+/*
+ * adc.c
+ *
+ *  Created on: Jul 13, 2025
+ *      Author: LightStore
+ */
+#include "adc0.h"
+#include "tm4c123gh6pm_registers.h"
+
+//For both potentiometers will use pe0(AIN3) and pe1(AIN2)
+
+static void GPIO_SetupADC0Pins(void)
+{
+    SYSCTL_RCGCGPIO_REG  |= 0x10;         // Enable clock for GPIO PORTE
+    while(!(SYSCTL_PRGPIO_REG & 0x10));   // Wait until GPIO PORTE clock is activated
+
+    GPIO_PORTE_AFSEL_REG |= 0x06;         // Enable Analog on PE1 & PE2 (bits 1 and 2)
+    GPIO_PORTE_DEN_REG   &= ~0x06;        // Disable Digital I/O on PE1 & PE2
+    GPIO_PORTE_AMSEL_REG |= 0x06;         // Enable Analog on PE1 & PE2
+}
+
+void ADC0_Init(void)
+{
+    SYSCTL_RCGCADC_REG |= (1<<0);
+    while(!(SYSCTL_PRADC_REG & 0x01));
+    GPIO_SetupADC0Pins();
+}
+
+uint16 ADC0_ReadChannel(ADC_PINS Channel)
+{
+    ADC0_ADCACTSS_REG &= ~0x08;              // Disable SS3
+    ADC0_ADCSSMUX3_REG = Channel;            // Select input channel
+    ADC0_ADCSSCTL3_REG = 0x06;               // IE=1, END=1
+    ADC0_ADCACTSS_REG |= 0x08;               // Enable SS3
+
+    ADC0_ADCPSSI_REG |= 0x08;                // Start conversion on SS3
+
+    while(!(ADC0_ADCRIS_REG & 0x08));        // Wait for completion
+
+    uint16 data = (uint16)(ADC0_ADCSSFIFO3_REG & 0xFFF); // Read 12 bits
+
+    ADC0_ADCISC_REG |= 0x08;                 // Clear interrupt
+
+    return data;
+}
+

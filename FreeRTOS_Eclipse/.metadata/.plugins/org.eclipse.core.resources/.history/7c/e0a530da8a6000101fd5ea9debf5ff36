@@ -1,0 +1,16 @@
+/*
+ * pot.h
+ *
+ *  Created on: Jul 14, 2025
+ *      Author: LightStore
+ */
+
+#ifndef HAL_LM35_H_
+#define HAL_LM35_H_
+
+
+uint8 LM35_getTemperature(void);
+
+
+
+#endif /* HAL_LM35_H_ */

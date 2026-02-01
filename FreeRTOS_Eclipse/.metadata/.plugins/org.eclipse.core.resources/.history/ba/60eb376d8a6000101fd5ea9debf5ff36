@@ -1,0 +1,10 @@
+/*
+ * pot.c
+ *
+ *  Created on: Jul 14, 2025
+ *      Author: LightStore
+ */
+#include "lm35.h"
+#include "adc0.h"
+
+

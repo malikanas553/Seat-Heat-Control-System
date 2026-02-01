@@ -1,0 +1,22 @@
+/*
+ * adc.h
+ *
+ *  Created on: Jul 13, 2025
+ *      Author: LightStore
+ */
+
+#ifndef ADC0_H_
+#define ADC0_H_
+
+#include "std_types.h"
+
+typedef enum
+{
+  ADC_PE1 = 2,ADC_PE0 = 1
+}ADC_PINS
+
+void ADC_Init(void);
+
+void ADC_ReadChannel(ADC_PINS Channel);
+
+#endif /* ADC0_H_ */

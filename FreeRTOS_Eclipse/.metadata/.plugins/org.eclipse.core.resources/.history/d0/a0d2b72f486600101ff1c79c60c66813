@@ -1,0 +1,72 @@
+/**********************************************************************************************
+ *
+ * Module: GPIO
+ *
+ * File Name: GPIO.h
+ *
+ * Description: Header file for the TM4C123GH6PM DIO driver for TivaC Built-in Buttons and LEDs
+ *
+ * Author: Edges for Training Team
+ *
+ ***********************************************************************************************/
+
+#ifndef GPIO_H_
+#define GPIO_H_
+
+#include "std_types.h"
+#include "tm4c123gh6pm_registers.h"
+
+
+#define GPIO_PORTB_PRIORITY_MASK      0xFFFF1FFF
+#define GPIO_PORTB_PRIORITY_BITS_POS  13
+#define GPIO_PORTB_INTERRUPT_PRIORITY 5
+
+#define GPIO_PORTF_PRIORITY_MASK      0xFF1FFFFF
+#define GPIO_PORTF_PRIORITY_BITS_POS  21
+#define GPIO_PORTF_INTERRUPT_PRIORITY 5
+
+#define GPIO_CHECK_SW1_INTERRUPT() (GPIO_PORTF_RIS_REG & (1<<0))
+#define GPIO_CHECK_SW2_INTERRUPT() (GPIO_PORTF_RIS_REG & (1<<4))
+#define GPIO_CHECK_EXTERNAL_BUTTON_INTERRUPT() (GPIO_PORTB_RIS_REG & (1<<2))
+
+#define GPIO_CLEAR_TRIG_FLAG_SW1() (GPIO_PORTF_ICR_REG |= (1<<0))
+#define GPIO_CLEAR_TRIG_FLAG_SW2() (GPIO_PORTF_ICR_REG |= (1<<4))
+#define GPIO_CLEAR_TRIG_FLAG_EXTERNAL_BUTTON() (GPIO_PORTB_ICR_REG |= (1<<2))
+
+
+#define PRESSED                ((uint8)0x00)
+#define RELEASED               ((uint8)0x01)
+
+#define BUILT_IN_LED 0
+#define EXTERNAL_LED 1
+
+void GPIOPortF_Handler(void);
+void GPIOPortF_SetCallBack(volatile void (*Ptr2Func) (void));
+
+void GPIO_BuiltinButtonsLedsInit(void);
+
+void GPIO_ExternalButtonInit(void);
+
+void GPIO_ExternalLedsInit(void);
+
+void GPIO_RedLedOn(uint8 led_id);
+void GPIO_BlueLedOn(uint8 led_id);
+void GPIO_GreenLedOn(uint8 led_id);
+
+void GPIO_RedLedOff(uint8 led_id);
+void GPIO_BlueLedOff(uint8 led_id);
+void GPIO_GreenLedOff(uint8 led_id);
+
+void GPIO_RedLedToggle(uint8 led_id);
+void GPIO_BlueLedToggle(uint8 led_id);
+void GPIO_GreenLedToggle(uint8 led_id);
+
+uint8 GPIO_SW1GetState(void);
+uint8 GPIO_SW2GetState(void);
+uint8 GPIO_ExternalButtonGetState(void);
+
+void GPIO_SW1EdgeTriggeredInterruptInit(void);
+void GPIO_SW2EdgeTriggeredInterruptInit(void);
+void GPIO_ExternalButtonEdgeTriggeredInterruptInit(void);
+
+#endif /* GPIO_H_ */

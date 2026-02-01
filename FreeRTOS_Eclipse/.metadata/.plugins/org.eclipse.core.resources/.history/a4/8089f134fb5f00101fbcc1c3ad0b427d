@@ -1,0 +1,32 @@
+/*
+ * adc.c
+ *
+ *  Created on: Jul 13, 2025
+ *      Author: LightStore
+ */
+#include "adc0.h"
+#include "tm4c123gh6pm_registers.h"
+
+//For both potentiometers will use pe0 and pe1
+
+static void GPIO_SetupADC0Pins(void)
+{
+    SYSCTL_RCGCGPIO_REG  |= 0x10;         /* Enable clock for GPIO PORTE */
+    while(!(SYSCTL_PRGPIO_REG & 0x10));   /* Wait until GPIO PORTA clock is activated and it is ready for access*/
+
+    GPIO_PORTE_AFSEL_REG |= 0x03;         /* Enable Analog on PE0 & PE1 */
+    GPIO_PORTE_DEN_REG   &= 0xFC;         /* Disable Digital I/O on PE0 & PE1 */
+    GPIO_PORTE_AMSEL_REG |= 0x03;         /* Disable Isolation and Enable Analog on PE0 & PE1 */
+    /* Set PMCx bits for PA0 & PA1 with value 1 to use PA0 as UART0 RX pin and PA1 as UART0 Tx pin */
+    GPIO_PORTA_PCTL_REG  = (GPIO_PORTA_PCTL_REG & 0xFFFFFF00) | 0x00000011;
+
+}
+
+void ADC_Init(void)
+{
+   SYSCTL_RCGCADC_REG |= (1<<0);
+   while(!(SYSCTL_PRADC_REG & 0x01));
+}
+
+
+

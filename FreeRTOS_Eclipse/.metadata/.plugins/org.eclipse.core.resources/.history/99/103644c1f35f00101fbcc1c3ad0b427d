@@ -1,0 +1,17 @@
+/*
+ * adc.h
+ *
+ *  Created on: Jul 13, 2025
+ *      Author: LightStore
+ */
+
+#ifndef ADC0_H_
+#define ADC0_H_
+
+
+
+void ADC_Init(void);
+
+void ADC_ReadChannel(void);
+
+#endif /* ADC0_H_ */

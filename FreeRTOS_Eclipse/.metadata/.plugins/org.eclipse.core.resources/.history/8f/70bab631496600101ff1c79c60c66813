@@ -1,0 +1,18 @@
+/*
+ * main.h
+ *
+ *  Created on: Jul 14, 2025
+ *      Author: LightStore
+ */
+
+#ifndef SOURCE_MAIN_H_
+#define SOURCE_MAIN_H_
+
+typedef enum
+{
+ OFF,LOW,MEDIUM,HIGH,HEATER_MAX_LEVEL,ERROR
+}heater_level;
+
+void ExternalButton_Handler(void);
+void BuiltInButtons_Handler(void)
+#endif /* SOURCE_MAIN_H_ */

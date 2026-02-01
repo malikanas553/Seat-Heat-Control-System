@@ -1,0 +1,69 @@
+/* Kernel includes. */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "timers.h"
+
+/* MCAL includes. */
+#include "gpio.h"
+
+/* The HW setup function */
+static void prvSetupHardware( void );
+
+/* FreeRTOS timers' callback */
+void xGreenLedTimerCallback(TimerHandle_t xTimer);
+void xRedLedTimerCallback(TimerHandle_t xTimer);
+
+/* Timers Handles */
+TimerHandle_t xGreenLEDTimer;
+TimerHandle_t xRedLEDTimer;
+
+int main()
+{
+    /* Setup the hardware for use with the Tiva C board. */
+    prvSetupHardware();
+
+    /* Create software timers */
+    xGreenLEDTimer = xTimerCreate(
+                        "Timer",                 /* Just a text name, not used by the RTOS  kernel. */
+                        pdMS_TO_TICKS(1000),     /* The timer period in ticks, must be greater than 0. */
+                        pdTRUE,                  /* The timer will auto-reload itself when it expire. */
+                        0,                       /* The ID is used to store a count of the number of times the timer has expired, which is initialized to 0. */
+                        xGreenLedTimerCallback   /* The timer calls this callback when it expires. */
+                      );
+    xRedLEDTimer = xTimerCreate("Red LED Timer", pdMS_TO_TICKS(2000), pdFALSE, 0, xRedLedTimerCallback);
+
+    /* Start the software timers */
+    xTimerStart(xGreenLEDTimer, 0);
+    xTimerStart(xRedLEDTimer, 0);
+
+    vTaskStartScheduler();
+
+    /* Should never reach here!  If you do then there was not enough heap
+    available for the idle task to be created. */
+    for (;;);
+
+}
+
+
+static void prvSetupHardware( void )
+{
+    /* Place here any needed HW initialization such as GPIO, UART, etc.  */
+    GPIO_BuiltinButtonsLedsInit();
+}
+
+void xGreenLedTimerCallback(TimerHandle_t xTimer)
+{
+    /* Toggle green LED state when the timer expires */
+    GPIO_GreenLedToggle();
+}
+
+
+void xRedLedTimerCallback(TimerHandle_t xTimer)
+{
+    /* Toggle red LED state when the timer expires */
+    GPIO_RedLedToggle();
+}
+
+
+
+/*-----------------------------------------------------------*/

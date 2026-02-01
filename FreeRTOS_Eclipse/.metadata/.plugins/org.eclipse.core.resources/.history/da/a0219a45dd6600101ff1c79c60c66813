@@ -1,0 +1,384 @@
+/* Kernel includes. */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "timers.h"
+#include "event_groups.h"
+#include "main.h"
+#include "semphr.h"
+#include "GPTM.h"
+
+
+/*ADC is a resource that can be used by one task only, assign mutex*/
+
+
+/* MCAL includes. */
+#include "gpio.h"
+#include "uart0.h"
+#include "adc0.h"
+
+/* HAL includes */
+#include "lm35.h"
+
+#include "tm4c123gh6pm_registers.h"
+
+#define mainSW2_INTERRUPT_BIT ( 1UL << 0UL )  /* Event bit 0, which is set by a SW2 Interrupt. */
+#define mainSW1_INTERRUPT_BIT ( 1UL << 1UL )  /* Event bit 1, which is set by a SW1 Interrupt. */
+#define mainExternal_Button_INTERRUPT_BIT ( 1UL << 2UL )  /* Event bit 2, which is set by a PB2 Interrupt. */
+
+#define DRIVER_SEAT_ID SENSOR1_CHANNEL_ID
+#define PASSENGER_SEAT_ID SENSOR2_CHANNEL_ID
+
+typedef enum
+{
+    DRIVER_HEATER,PASSENGER_HEATER
+}heater;
+
+typedef struct
+{
+    uint8 seat_id;
+    heater heater_id;
+    uint8 current_temp;
+    uint8 desired_temp;
+    heater_level heater_current_state;
+    xSemaphoreHandle Heater_Semaphore;
+    xSemaphoreHandle Display_Semaphore;
+}seat;
+
+seat passenger_seat = {PASSENGER_SEAT_ID,PASSENGER_HEATER,0,0,OFF,NULL,NULL};
+seat driver_seat = {DRIVER_SEAT_ID,DRIVER_HEATER,0,0,OFF,NULL,NULL};
+
+/* The HW setup function */
+static void prvSetupHardware( void );
+
+
+void vCheckSeatTemp(void * pvParameters);
+void vHeaterSetLevel(void * pvParameters);
+void vControlHeater(void * pvParameters);
+void vDisplayStatus(void * pvParameters);
+
+EventGroupHandle_t xButtonEventGroup;
+
+
+xSemaphoreHandle xADC0Mutex;
+xSemaphoreHandle xUART0Mutex;
+
+TaskHandle_t xCheckPassengerTempTaskHandle;
+TaskHandle_t xCheckDriverTempTaskHandle;
+TaskHandle_t xCheckPassengerTempTaskHandle;
+TaskHandle_t xCheckPassengerTempTaskHandle;
+TaskHandle_t xCheckPassengerTempTaskHandle;
+TaskHandle_t xCheckPassengerTempTaskHandle;
+TaskHandle_t xCheckPassengerTempTaskHandle;
+TaskHandle_t xCheckPassengerTempTaskHandle;
+
+
+int main()
+{
+    /* Setup the hardware for use with the Tiva C board. */
+    prvSetupHardware();
+
+    xADC0Mutex = xSemaphoreCreateMutex();
+    xUART0Mutex = xSemaphoreCreateMutex();
+
+    xButtonEventGroup = xEventGroupCreate();
+
+    passenger_seat.Heater_Semaphore = xSemaphoreCreateBinary();
+    passenger_seat.Display_Semaphore = xSemaphoreCreateBinary();
+
+    driver_seat.Heater_Semaphore = xSemaphoreCreateBinary();
+    driver_seat.Display_Semaphore = xSemaphoreCreateBinary();
+
+    /* Create software timers */
+    xTaskCreate(vCheckSeatTemp, /* Pointer to the function that implements the task. */
+                "Passenger Seat Temp Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,            /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&passenger_seat,           /* We are not passing a task parameter in this example. */
+                2,              /* This task will run at priority 1. */
+                &xCheckPassengerTempTaskHandle);          /* We are not using the task handle. */
+    xTaskCreate(vCheckSeatTemp, /* Pointer to the function that implements the task. */
+                "Passenger Seat Temp Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,            /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&driver_seat,           /* We are not passing a task parameter in this example. */
+                2,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+    xTaskCreate(vDisplayStatus,              /* Pointer to the function that implements the task. */
+                "Display Status Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,    /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&passenger_seat,           /* We are not passing a task parameter in this example. */
+                1,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+    xTaskCreate(vDisplayStatus,              /* Pointer to the function that implements the task. */
+                "Display Status Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,    /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&driver_seat,           /* We are not passing a task parameter in this example. */
+                1,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+    xTaskCreate(vHeaterSetLevel, /* Pointer to the function that implements the task. */
+                "Heater Set Level Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,            /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&passenger_seat,           /* We are not passing a task parameter in this example. */
+                4,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+    xTaskCreate(vHeaterSetLevel, /* Pointer to the function that implements the task. */
+                "Heater Set Level Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,            /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&driver_seat,           /* We are not passing a task parameter in this example. */
+                4,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+    xTaskCreate(vControlHeater,              /* Pointer to the function that implements the task. */
+                "Control Heater Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,    /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&passenger_seat,           /* We are not passing a task parameter in this example. */
+                3,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+    xTaskCreate(vControlHeater,              /* Pointer to the function that implements the task. */
+                "Control Heater Task",       /* Text name for the task.  This is to facilitate debugging only. */
+                configMINIMAL_STACK_SIZE,    /* Stack depth - most small microcontrollers will use much less stack than this. */
+                (void *)&driver_seat,           /* We are not passing a task parameter in this example. */
+                3,              /* This task will run at priority 1. */
+                NULL);          /* We are not using the task handle. */
+
+
+
+
+    vTaskStartScheduler();
+
+    /* Should never reach here!  If you do then there was not enough heap
+    available for the idle task to be created. */
+    for (;;);
+
+}
+
+
+static void prvSetupHardware( void )
+{
+    /* Place here any needed HW initialization such as GPIO, UART, etc.  */
+    UART0_Init();
+    GPIOPortF_SetCallBack(BuiltInButtons_Handler);
+    GPIOPortB_SetCallBack(ExternalButton_Handler);
+    GPIO_BuiltinButtonsLedsInit();
+    GPIO_ExternalButtonInit();
+    GPIO_ExternalLedsInit();
+    GPIO_ExternalButtonEdgeTriggeredInterruptInit();
+    GPIO_SW1EdgeTriggeredInterruptInit();
+    GPIO_SW2EdgeTriggeredInterruptInit();
+    ADC0_Init();
+
+}
+
+void vCheckSeatTemp(void * pvParameters)
+{
+    heater_level new_level;
+    uint8 current_temp;
+    uint8 desired_temp;
+    uint8 temp_diff;
+    seat * pSeatStats = (seat *)pvParameters;
+
+    for(;;)
+    {
+        xSemaphoreTake(xADC0Mutex, portMAX_DELAY);
+        current_temp = LM35_getTemperature(pSeatStats->seat_id);
+        xSemaphoreGive(xADC0Mutex);
+        desired_temp = pSeatStats->desired_temp;
+        if(current_temp < 5 || current_temp > 40)
+        {
+            new_level = ERROR;
+        }else if(desired_temp == 0 || current_temp >= desired_temp )
+        {
+            new_level = OFF;
+        }else
+        {
+            temp_diff = desired_temp - current_temp;
+            if (temp_diff >= 10)
+            {
+                new_level = HIGH;
+            }
+            else if (temp_diff >= 5)
+            {
+                new_level = MEDIUM;
+            }
+            else if (temp_diff >= 2)
+            {
+                new_level = LOW;
+            }else
+            {
+                new_level = OFF;
+            }
+
+        }
+        // Only notify on change
+        if (new_level != pSeatStats->heater_current_state)
+        {
+            pSeatStats->heater_current_state = new_level;
+            xSemaphoreGive(pSeatStats->Heater_Semaphore);
+        }
+        pSeatStats->current_temp = current_temp;
+        xSemaphoreGive(pSeatStats->Display_Semaphore);
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+
+    }
+}
+void vHeaterSetLevel(void * pvParameters)
+{
+
+    EventBits_t xButtonEventGroupValue;
+    seat * pSeatStats = (seat *)pvParameters;
+    EventBits_t xBitsToWaitFor;
+    switch(pSeatStats->seat_id)
+    {
+    case PASSENGER_SEAT_ID:
+        xBitsToWaitFor = ( mainSW1_INTERRUPT_BIT);
+        break;
+    case DRIVER_SEAT_ID:
+        xBitsToWaitFor = ( mainSW2_INTERRUPT_BIT | mainExternal_Button_INTERRUPT_BIT);
+        break;
+    }
+    for (;;)
+    {
+        /* Block to wait for event bits to become set within the event group. */
+        xButtonEventGroupValue = xEventGroupWaitBits( xButtonEventGroup,    /* The event group to read. */
+                                                      xBitsToWaitFor, /* Bits to test. */
+                                                      pdTRUE,         /* Clear bits on exit if the unblock condition is met. */
+                                                      pdFALSE,        /* Don't wait for all bits. */
+                                                      portMAX_DELAY); /* Don't time out. */
+
+        if (((xButtonEventGroupValue & mainSW2_INTERRUPT_BIT) != 0) || ((xButtonEventGroupValue & mainExternal_Button_INTERRUPT_BIT) != 0) || (xButtonEventGroupValue & mainSW1_INTERRUPT_BIT) != 0)
+        {
+
+            switch(pSeatStats->desired_temp)
+            {
+            case 35:
+                (pSeatStats->desired_temp) = 0;
+                break;
+            case 30:
+                (pSeatStats->desired_temp) = 35;
+                break;
+            case 25:
+                (pSeatStats->desired_temp) = 30;
+                break;
+            default:
+                (pSeatStats->desired_temp) = 25;
+                break;
+            }
+        }
+    }
+
+}
+
+void vControlHeater(void * pvParameters)
+{
+    seat * pSeatStats = (seat *)pvParameters;
+    for(;;)
+    {
+        xSemaphoreTake(pSeatStats->Heater_Semaphore, portMAX_DELAY);
+        switch (pSeatStats->heater_current_state)
+        {
+        case OFF:
+            GPIO_RedLedOff(pSeatStats->heater_id);
+            GPIO_BlueLedOff(pSeatStats->heater_id);
+            GPIO_GreenLedOff(pSeatStats->heater_id);
+            break;
+        case LOW:
+            GPIO_GreenLedOn(pSeatStats->heater_id);
+            GPIO_RedLedOff(pSeatStats->heater_id);
+            GPIO_BlueLedOff(pSeatStats->heater_id);
+            break;
+        case MEDIUM:
+            GPIO_BlueLedOn(pSeatStats->heater_id);
+            GPIO_GreenLedOff(pSeatStats->heater_id);
+            GPIO_RedLedOff(pSeatStats->heater_id);
+            break;
+        case HIGH:
+            GPIO_RedLedOff(pSeatStats->heater_id);
+            GPIO_BlueLedOn(pSeatStats->heater_id);
+            GPIO_GreenLedOn(pSeatStats->heater_id);
+            break;
+        case ERROR:
+            GPIO_RedLedOn(pSeatStats->heater_id);
+            GPIO_BlueLedOff(pSeatStats->heater_id);
+            GPIO_GreenLedOff(pSeatStats->heater_id);
+        default:
+            break;
+        }
+    }
+}
+void vDisplayStatus(void * pvParameters)
+{
+    seat * pSeatStats = (seat *)pvParameters;
+    for(;;)
+    {
+        xSemaphoreTake(pSeatStats->Display_Semaphore, portMAX_DELAY);
+        xSemaphoreTake(xUART0Mutex, portMAX_DELAY);
+        switch(pSeatStats->seat_id)
+        {
+        case DRIVER_SEAT_ID:
+            UART0_SendString("Driver Seat:\r\n");
+            break;
+        case PASSENGER_SEAT_ID:
+            UART0_SendString("Passenger Seat:\r\n");
+            break;
+        }
+        UART0_SendString("Current Temperature: ");
+        UART0_SendInteger(pSeatStats->current_temp);
+        UART0_SendString("\r\n");
+        UART0_SendString("Desired Temperature: ");
+        UART0_SendInteger(pSeatStats->desired_temp);
+        UART0_SendString("\r\n");
+        UART0_SendString("Heater Current State: ");
+        switch(pSeatStats->heater_current_state)
+        {
+        case OFF:
+            UART0_SendString("OFF\r\n");
+            break;
+        case LOW:
+            UART0_SendString("LOW\r\n");
+            break;
+        case MEDIUM:
+            UART0_SendString("MEDIUM\r\n");
+            break;
+        case HIGH:
+            UART0_SendString("HIGH\r\n");
+            break;
+        default:
+            UART0_SendString("ERROR\r\n");
+            break;
+        }
+        xSemaphoreGive(xUART0Mutex);
+    }
+}
+
+void BuiltInButtons_Handler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if(GPIO_CHECK_SW1_INTERRUPT())           /* PF0 handler code */
+    {
+        xEventGroupSetBitsFromISR(xButtonEventGroup, mainSW2_INTERRUPT_BIT,&xHigherPriorityTaskWoken);
+        GPIO_CLEAR_TRIG_FLAG_SW1();       /* Clear Trigger flag for PF0 (Interrupt Flag) */
+    }
+    else if(GPIO_CHECK_SW2_INTERRUPT())      /* PF4 handler code */
+    {
+        xEventGroupSetBitsFromISR(xButtonEventGroup, mainSW1_INTERRUPT_BIT,&xHigherPriorityTaskWoken);
+        GPIO_CLEAR_TRIG_FLAG_SW2();       /* Clear Trigger flag for PF4 (Interrupt Flag) */
+    }
+
+    portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
+}
+
+void ExternalButton_Handler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if(GPIO_CHECK_EXTERNAL_BUTTON_INTERRUPT())           /* PF0 handler code */
+    {
+        xEventGroupSetBitsFromISR(xButtonEventGroup, mainSW2_INTERRUPT_BIT,&xHigherPriorityTaskWoken);
+        GPIO_CLEAR_TRIG_FLAG_EXTERNAL_BUTTON();       /* Clear Trigger flag for PF0 (Interrupt Flag) */
+    }
+
+    portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
+}
+
+
+
+
+
+/*-----------------------------------------------------------*/
